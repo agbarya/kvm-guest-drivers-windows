@@ -251,6 +251,14 @@ VIOSerialEvtDevicePrepareHardware(
         TraceEvents(TRACE_LEVEL_INFORMATION, DBG_PNP,
                     "VirtIOConsoleConfig->max_nr_ports %d\n", pContext->consoleConfig.max_nr_ports);
     }
+
+#if (WINVER == 0x0A00)
+	if (virtio_is_feature_enabled(u64HostFeatures, VIRTIO_F_IOMMU_PLATFORM)) {
+		TraceEvents(TRACE_LEVEL_INFORMATION, DBG_INIT, "IOMMU is enabled\n");
+		virtio_feature_enable(u64GuestFeatures, VIRTIO_F_IOMMU_PLATFORM);
+	}
+#endif
+
     VirtIOWdfSetDriverFeatures(&pContext->VDevice, u64GuestFeatures);
 
     if(pContext->isHostMultiport)

@@ -242,6 +242,12 @@ VIOInputEvtDevicePrepareHardware(
     {
         virtio_feature_enable(guestFeatures, VIRTIO_F_ANY_LAYOUT);
     }
+#if (WINVER == 0x0A00)
+	if (virtio_is_feature_enabled(hostFeatures, VIRTIO_F_IOMMU_PLATFORM)) {
+		TraceEvents(TRACE_LEVEL_INFORMATION, DBG_HW_ACCESS, "IOMMU is enabled\n");
+		virtio_feature_enable(guestFeatures, VIRTIO_F_IOMMU_PLATFORM);
+	}
+#endif
     VirtIOWdfSetDriverFeatures(&pContext->VDevice, guestFeatures);
 
     // Figure out what kind of input device this is and build a

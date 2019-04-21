@@ -84,6 +84,12 @@ BalloonInit(
     {
         nvqs = 2;
     }
+#if (WINVER == 0x0A00)
+	if (virtio_is_feature_enabled(u64HostFeatures, VIRTIO_F_IOMMU_PLATFORM)) {
+		TraceEvents(TRACE_LEVEL_INFORMATION, DBG_PNP, "IOMMU is enabled\n");
+		virtio_feature_enable(u64GuestFeatures, VIRTIO_F_IOMMU_PLATFORM);
+	}
+#endif
 
     status = VirtIOWdfSetDriverFeatures(&devCtx->VDevice, u64GuestFeatures);
     if (NT_SUCCESS(status))
