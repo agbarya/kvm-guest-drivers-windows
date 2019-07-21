@@ -57,6 +57,7 @@ WriteTest(
     if (!pDev) return FALSE;
 
     printf("%s.\n", __FUNCTION__);
+	printf("buffer size: %zu\n", size);
 
 
     buf = (PUCHAR)GlobalAlloc(0, size);
@@ -94,6 +95,70 @@ WriteTest(
     GlobalFree(buf);
 
     return res;
+}
+
+BOOL
+WriteTestSizedBuffer(
+	__in CDevice *pDev,
+	__in BOOLEAN ovrl
+)
+{
+	PUCHAR  buf = NULL;
+	BOOLEAN res = TRUE;
+	int     i;
+	size_t  size = 128*(4096); //QUEUE_DESCRIPTORS * PAGE_SIZE
+	size_t write_size = 0;
+
+	if (!pDev) return FALSE;
+
+	printf("%s.\n", __FUNCTION__);
+	printf("buffer size: %zu\n", size);
+
+
+	buf = (PUCHAR)GlobalAlloc(0, size);
+
+	if (buf == NULL)
+	{
+		printf("%s: Could not allocate %zd "
+			"bytes buf\n", __FUNCTION__, size);
+
+		return FALSE;
+	}
+
+	printf("Enter the buffer size to be written:\n");
+	scanf_s("%zd", &write_size);
+	getchar(); // to skip the \n after typing the size
+	
+	if (write_size > size) {
+		printf("%s: Can not send %zd "
+			"bytes (maximum buffer size is: %zd)\n", 
+			__FUNCTION__, write_size, size);
+
+		return FALSE;
+	}
+	for (i = 0;i < (int)write_size; i++)
+	{
+		buf[i] = 'A' + (i % ('Z'-'A'+1));
+	}
+	buf[i] = 0;
+	size = i;
+	res = ovrl ? pDev->WriteEx(buf, &size) : pDev->Write(buf, &size);
+
+	if (!res)
+	{
+		printf("%s: WriteFile failed: "
+			"Error %d\n", __FUNCTION__, GetLastError());
+	}
+	else
+	{
+		printf("%s\n", buf);
+		printf("%s: WriteFile OK: "
+			"snd %zd bytes\n\n", __FUNCTION__, size);
+	}
+
+	GlobalFree(buf);
+
+	return res;
 }
 
 BOOL
@@ -243,6 +308,10 @@ wmain(
            case 'S':
               WriteTestCycl(m_pDev, ovrl);
               break;
+		   case 't':
+		   case 'T':
+			   WriteTestSizedBuffer(m_pDev, ovrl);
+			   break;
            case 'q':
            case 'Q':
               stoptest = TRUE;

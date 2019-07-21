@@ -186,7 +186,8 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DRIVER_CONTEXT, GetDriverContext)
 NTSTATUS
 VIOSerialFillQueue(
     IN struct virtqueue *vq,
-    IN WDFSPINLOCK Lock
+    IN WDFSPINLOCK Lock,
+	IN PVIRTIO_WDF_DRIVER pWdfDriver
 );
 
 VOID
@@ -197,7 +198,8 @@ VIOSerialDrainQueue(
 NTSTATUS
 VIOSerialAddInBuf(
     IN struct virtqueue *vq,
-    IN PPORT_BUFFER buf
+    IN PPORT_BUFFER buf,
+	IN PVIRTIO_WDF_DRIVER pWdfDriver
 );
 
 VOID

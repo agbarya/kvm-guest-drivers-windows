@@ -269,6 +269,27 @@ VIOInputEvtDevicePrepareHardware(
         }
     }
 
+	pContext->VDevice.MaximumTransferLength = VIRTIO_DMA_MAXIMUM_TRANSFER_LENGTH;
+	status = VirtIOWdfInitializeDMA(
+		&pContext->VDevice,
+		Device);
+	if (!NT_SUCCESS(status))
+	{
+		TraceEvents(TRACE_LEVEL_ERROR, DBG_HW_ACCESS, "VirtIOWdfInitializeDMA failed with %x\n", status);
+		return status;
+	}
+	TraceEvents(TRACE_LEVEL_INFORMATION, DBG_HW_ACCESS, "DMA is initialized successfully for virtio-input:\n");
+	TraceEvents(TRACE_LEVEL_INFORMATION, DBG_HW_ACCESS,
+		"\tWriteCommonBuffer 0x%p  (#0x%I64X), length %I64d\n",
+		pContext->VDevice.WriteCommonBufferBase,
+		pContext->VDevice.WriteCommonBufferBaseLA.QuadPart,
+		WdfCommonBufferGetLength(pContext->VDevice.WriteCommonBuffer));
+	TraceEvents(TRACE_LEVEL_INFORMATION, DBG_HW_ACCESS,
+		"\tReadCommonBuffer 0x%p  (#0x%I64X), length %I64d\n",
+		pContext->VDevice.ReadCommonBufferBase,
+		pContext->VDevice.ReadCommonBufferBaseLA.QuadPart,
+		WdfCommonBufferGetLength(pContext->VDevice.ReadCommonBuffer));
+
     TraceEvents(TRACE_LEVEL_INFORMATION, DBG_HW_ACCESS, "<-- %s\n", __FUNCTION__);
     return status;
 }

@@ -51,6 +51,8 @@ size_t VIOSerialSendBuffers(IN PVIOSERIAL_PORT Port,
                             IN PWRITE_BUFFER_ENTRY Entry,
                             IN size_t Length)
 {
+	PPORTS_DEVICE    pContext = GetPortsDevice(Port->BusDevice);
+	PVIRTIO_WDF_DRIVER pWdfDriver = &pContext->VDevice;
     struct virtqueue *vq = GetOutQueue(Port);
     struct VirtIOBufferDescriptor sg[QUEUE_DESCRIPTORS];
     PVOID buffer = Entry->Buffer;
@@ -78,7 +80,12 @@ size_t VIOSerialSendBuffers(IN PVIOSERIAL_PORT Port,
 
     WdfSpinLockAcquire(Port->OutVqLock);
 
-    ret = virtqueue_add_buf(vq, sg, out, 0, Entry->Buffer, NULL, 0);
+	// TODO: handle the case that total length is larger than WriteCommonBufferSize 
+	// (even that will be a rare case since the common-buffer was created with a large 
+	// size initially unless there is short memory to handle its creation)
+	ret = virtqueue_add_buf(vq, sg, out, 0, Entry->Buffer, 
+							pWdfDriver->WriteCommonBufferBase, 
+							pWdfDriver->WriteCommonBufferBaseLA.LowPart);
 
     if (ret >= 0)
     {
@@ -288,7 +295,9 @@ VIOSerialFillReadBufLocked(
     {
         port->InBuf = NULL;
 
-        status = VIOSerialAddInBuf(GetInQueue(port), buf);
+		PVIRTIO_WDF_DRIVER pWdfDriver = &GetPortsDevice(port->BusDevice)->VDevice;
+
+        status = VIOSerialAddInBuf(GetInQueue(port), buf, pWdfDriver);
         if (!NT_SUCCESS(status))
         {
            TraceEvents(TRACE_LEVEL_ERROR, DBG_QUEUEING, "%s::%d  VIOSerialAddInBuf failed\n", __FUNCTION__, __LINE__);
@@ -302,7 +311,8 @@ VIOSerialFillReadBufLocked(
 NTSTATUS
 VIOSerialAddInBuf(
     IN struct virtqueue *vq,
-    IN PPORT_BUFFER buf)
+    IN PPORT_BUFFER buf,
+	IN PVIRTIO_WDF_DRIVER pWdfDriver)
 {
     NTSTATUS  status = STATUS_SUCCESS;
     struct VirtIOBufferDescriptor sg;
@@ -322,7 +332,9 @@ VIOSerialAddInBuf(
     sg.physAddr = buf->pa_buf;
     sg.length = buf->size;
 
-    if(0 > virtqueue_add_buf(vq, &sg, 0, 1, buf, NULL, 0))
+    if(0 > virtqueue_add_buf(vq, &sg, 0, 1, buf, 
+							pWdfDriver->ReadCommonBufferBase,
+							pWdfDriver->ReadCommonBufferBaseLA.LowPart))
     {
         TraceEvents(TRACE_LEVEL_ERROR, DBG_QUEUEING, "<-- %s cannot add_buf\n", __FUNCTION__);
         status = STATUS_INSUFFICIENT_RESOURCES;

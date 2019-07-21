@@ -243,6 +243,11 @@ NTSTATUS VirtIOWdfShutdown(PVIRTIO_WDF_DRIVER pWdfDriver)
 
     PCIFreeBars(pWdfDriver);
 
+	if (pWdfDriver->WriteCommonBuffer != NULL)
+		WdfObjectDelete(pWdfDriver->WriteCommonBuffer);
+	if (pWdfDriver->ReadCommonBuffer != NULL)
+		WdfObjectDelete(pWdfDriver->ReadCommonBuffer);
+
     return STATUS_SUCCESS;
 }
 
@@ -282,3 +287,129 @@ UCHAR VirtIOWdfGetISRStatus(PVIRTIO_WDF_DRIVER pWdfDriver)
 {
     return virtio_read_isr_status(&pWdfDriver->VIODevice);
 }
+
+NTSTATUS
+VirtIOWdfInitializeDMA(
+	IN PVIRTIO_WDF_DRIVER pWdfDriver,
+	IN WDFDEVICE Device
+)
+{
+	NTSTATUS    status = STATUS_SUCCESS;
+	ULONG       dteCount;
+	size_t		bufferSize;
+
+	//
+	// Calculate the number of DMA-transfer-lements + 1 needed to
+	// support the MaximumTransferLength.
+	//
+	dteCount = BYTES_TO_PAGES((ULONG)ROUND_TO_PAGES(
+		pWdfDriver->MaximumTransferLength) + PAGE_SIZE);
+
+	//
+	// alignment requirement
+	//
+	WdfDeviceSetAlignmentRequirement(Device, VIRTIO_DMA_ALIGNMENT);
+
+	//
+	// Create a new DMA Enabler instance.
+	// Use Scatter/Gather, 64-bit Addresses, Duplex-type profile.
+	//
+	{
+		WDF_DMA_ENABLER_CONFIG   dmaConfig;
+
+		WDF_DMA_ENABLER_CONFIG_INIT(&dmaConfig,
+			WdfDmaProfileScatterGather64Duplex,
+			pWdfDriver->MaximumTransferLength);
+
+#if (WINVER == 0x0A00)
+		//
+		// Opt-in to DMA version 3, which is required by
+		// WdfDmaTransactionSetSingleTransferRequirement
+		//
+		dmaConfig.WdmDmaVersionOverride = 3;
+#endif
+
+		status = WdfDmaEnablerCreate(Device,
+			&dmaConfig,
+			WDF_NO_OBJECT_ATTRIBUTES,
+			&pWdfDriver->DmaEnabler);
+
+		if (!NT_SUCCESS(status)) {			
+			return status;
+		}
+
+		WdfDmaEnablerSetMaximumScatterGatherElements(
+			pWdfDriver->DmaEnabler, dteCount);
+	}
+
+	//
+	// Allocate common buffer for building writes
+	//
+	// NOTE: This common buffer will not be cached.
+	//
+	pWdfDriver->WriteCommonBufferSize = PAGE_SIZE * dteCount;
+
+	status = STATUS_INSUFFICIENT_RESOURCES;
+	bufferSize = pWdfDriver->WriteCommonBufferSize;
+	while (status == STATUS_INSUFFICIENT_RESOURCES) {
+		// check if the creation fails due to insufficient resources (memory)
+		// if so try to decrease the size till it succeed
+		status = WdfCommonBufferCreate(pWdfDriver->DmaEnabler,
+			bufferSize,
+			WDF_NO_OBJECT_ATTRIBUTES,
+			&pWdfDriver->WriteCommonBuffer);
+		bufferSize /= 2;
+		if (bufferSize < PAGE_SIZE) {
+			break;
+		}
+	}
+	if (!NT_SUCCESS(status)) {
+		return status;
+	}
+	pWdfDriver->WriteCommonBufferSize = bufferSize * 2;
+
+	pWdfDriver->WriteCommonBufferBase =
+		WdfCommonBufferGetAlignedVirtualAddress(pWdfDriver->WriteCommonBuffer);
+
+	pWdfDriver->WriteCommonBufferBaseLA =
+		WdfCommonBufferGetAlignedLogicalAddress(pWdfDriver->WriteCommonBuffer);
+
+	RtlZeroMemory(pWdfDriver->WriteCommonBufferBase,
+		pWdfDriver->WriteCommonBufferSize);
+
+	//
+	// Allocate common buffer for building reads
+	//
+	// NOTE: This common buffer will not be cached.
+	//
+	pWdfDriver->ReadCommonBufferSize = PAGE_SIZE * dteCount;
+
+	status = STATUS_INSUFFICIENT_RESOURCES;
+	bufferSize = pWdfDriver->ReadCommonBufferSize;
+	while (status == STATUS_INSUFFICIENT_RESOURCES) {
+		status = WdfCommonBufferCreate(pWdfDriver->DmaEnabler,
+			bufferSize,
+			WDF_NO_OBJECT_ATTRIBUTES,
+			&pWdfDriver->ReadCommonBuffer);
+		bufferSize /= 2;
+		if (bufferSize < PAGE_SIZE) {
+			break;
+		}
+	}
+	if (!NT_SUCCESS(status)) {
+		return status;
+	}
+	pWdfDriver->ReadCommonBufferSize = bufferSize * 2;
+
+	pWdfDriver->ReadCommonBufferBase =
+		WdfCommonBufferGetAlignedVirtualAddress(pWdfDriver->ReadCommonBuffer);
+
+	pWdfDriver->ReadCommonBufferBaseLA =
+		WdfCommonBufferGetAlignedLogicalAddress(pWdfDriver->ReadCommonBuffer);
+
+	RtlZeroMemory(pWdfDriver->ReadCommonBufferBase,
+		pWdfDriver->ReadCommonBufferSize);
+
+	return status;
+}
+

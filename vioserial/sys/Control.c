@@ -84,7 +84,7 @@ VIOSerialCtrlWorkHandler(
         VIOSerialHandleCtrlMsg(Device, buf);
 
         WdfSpinLockAcquire(pContext->CInVqLock);
-        status = VIOSerialAddInBuf(vq, buf);
+        status = VIOSerialAddInBuf(vq, buf, &pContext->VDevice);
         if (!NT_SUCCESS(status))
         {
            TraceEvents(TRACE_LEVEL_ERROR, DBG_PNP, "%s::%d Error adding buffer to queue\n", __FUNCTION__, __LINE__);

@@ -34,6 +34,10 @@
 #include <wdf.h>
 #include "virtio_pci.h"
 
+/*#define VIRTIO_DMA_ALIGNMENT (FILE_512_BYTE_ALIGNMENT)*/
+#define VIRTIO_DMA_ALIGNMENT					(PAGE_SIZE - 1)
+#define VIRTIO_DMA_MAXIMUM_TRANSFER_LENGTH		(1 << 25) // 32MB
+
 /* Configures a virtqueue, see VirtIOWdfInitQueues. */
 typedef struct virtio_wdf_queue_param {
     /* interrupt associated with the queue */
@@ -57,6 +61,21 @@ typedef struct virtio_wdf_driver {
 
     WDFINTERRUPT            ConfigInterrupt;
     PVIRTIO_WDF_QUEUE_PARAM pQueueParams;
+
+	// DMA
+	WDFDMAENABLER           DmaEnabler;
+	ULONG                   MaximumTransferLength;
+
+	WDFCOMMONBUFFER         WriteCommonBuffer;
+	size_t                  WriteCommonBufferSize;
+	PUCHAR					WriteCommonBufferBase;
+	PHYSICAL_ADDRESS        WriteCommonBufferBaseLA;  // Logical Address
+
+													  // Read
+	WDFCOMMONBUFFER         ReadCommonBuffer;
+	size_t                  ReadCommonBufferSize;
+	PUCHAR					ReadCommonBufferBase;
+	PHYSICAL_ADDRESS        ReadCommonBufferBaseLA;   // Logical Address
     
 } VIRTIO_WDF_DRIVER, *PVIRTIO_WDF_DRIVER;
 
@@ -138,3 +157,6 @@ void VirtIOWdfDeviceSet(PVIRTIO_WDF_DRIVER pWdfDriver,
                         ULONG offset,
                         CONST PVOID buf,
                         ULONG len);
+
+NTSTATUS VirtIOWdfInitializeDMA(IN PVIRTIO_WDF_DRIVER pWdfDriver,
+								IN WDFDEVICE Device);

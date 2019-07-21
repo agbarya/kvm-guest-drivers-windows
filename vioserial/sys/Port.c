@@ -234,9 +234,10 @@ VIOSerialDiscardPortDataLocked(
         buf = (PPORT_BUFFER)virtqueue_get_buf(vq, &len);
     }
 
+	PVIRTIO_WDF_DRIVER pWdfDriver = &GetPortsDevice(port->BusDevice)->VDevice;
     while (buf)
     {
-        status = VIOSerialAddInBuf(vq, buf);
+        status = VIOSerialAddInBuf(vq, buf, pWdfDriver);
         if(!NT_SUCCESS(status))
         {
            ++ret;
@@ -680,6 +681,7 @@ VOID VIOSerialPortWrite(IN WDFQUEUE Queue,
     WDFDEVICE Device;
     PDRIVER_CONTEXT Context;
     WDFMEMORY EntryHandle;
+	VIRTIO_WDF_DRIVER pContext;
 
     TraceEvents(TRACE_LEVEL_VERBOSE, DBG_WRITE,
         "--> %s Request: %p Length: %d\n", __FUNCTION__, Request, Length);
@@ -687,6 +689,7 @@ VOID VIOSerialPortWrite(IN WDFQUEUE Queue,
     PAGED_CODE();
 
     Device = WdfIoQueueGetDevice(Queue);
+	pContext = GetPortsDevice(Device)->VDevice;
     Port = RawPdoSerialPortGetData(Device)->port;
     if (Port->Removed)
     {
@@ -1418,7 +1421,7 @@ NTSTATUS VIOSerialPortEvtDeviceD0Entry(
         return STATUS_NOT_FOUND;
     }
 
-    status = VIOSerialFillQueue(GetInQueue(port), port->InBufLock);
+    status = VIOSerialFillQueue(GetInQueue(port), port->InBufLock, &pCtx->VDevice);
     if (!NT_SUCCESS(status))
     {
         TraceEvents(TRACE_LEVEL_ERROR, DBG_PNP,

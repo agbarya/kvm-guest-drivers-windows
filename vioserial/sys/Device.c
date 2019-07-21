@@ -227,6 +227,27 @@ VIOSerialEvtDevicePrepareHardware(
         return status;
     }
 
+	pContext->VDevice.MaximumTransferLength = VIRTIO_DMA_MAXIMUM_TRANSFER_LENGTH;
+	status = VirtIOWdfInitializeDMA(
+		&pContext->VDevice,
+		Device);
+	if (!NT_SUCCESS(status))
+	{
+		TraceEvents(TRACE_LEVEL_ERROR, DBG_HW_ACCESS, "VirtIOWdfInitializeDMA failed with %x\n", status);
+		return status;
+	}
+	TraceEvents(TRACE_LEVEL_INFORMATION, DBG_HW_ACCESS, "DMA is initialized successfully for virtio-serial:\n");
+	TraceEvents(TRACE_LEVEL_INFORMATION, DBG_HW_ACCESS,
+		"\tWriteCommonBuffer 0x%p  (#0x%I64X), length %I64d\n",
+		pContext->VDevice.WriteCommonBufferBase,
+		pContext->VDevice.WriteCommonBufferBaseLA.QuadPart,
+		WdfCommonBufferGetLength(pContext->VDevice.WriteCommonBuffer));
+	TraceEvents(TRACE_LEVEL_INFORMATION, DBG_HW_ACCESS,
+		"\tReadCommonBuffer 0x%p  (#0x%I64X), length %I64d\n",
+		pContext->VDevice.ReadCommonBufferBase,
+		pContext->VDevice.ReadCommonBufferBaseLA.QuadPart,
+		WdfCommonBufferGetLength(pContext->VDevice.ReadCommonBuffer));
+
     pContext->consoleConfig.max_nr_ports = 1;
 
     u64HostFeatures = VirtIOWdfGetDeviceFeatures(&pContext->VDevice);
@@ -467,7 +488,8 @@ VOID VIOSerialShutDownAllQueues(IN WDFOBJECT WdfDevice)
 NTSTATUS
 VIOSerialFillQueue(
     IN struct virtqueue *vq,
-    IN WDFSPINLOCK Lock
+    IN WDFSPINLOCK Lock,
+	IN PVIRTIO_WDF_DRIVER pWdfDriver
 )
 {
     NTSTATUS     status = STATUS_SUCCESS;
@@ -488,7 +510,7 @@ VIOSerialFillQueue(
         }
 
         WdfSpinLockAcquire(Lock);
-        status = VIOSerialAddInBuf(vq, buf);
+        status = VIOSerialAddInBuf(vq, buf, pWdfDriver);
         if(!NT_SUCCESS(status))
         {
            VIOSerialFreeBuffer(buf);
@@ -539,7 +561,7 @@ VIOSerialEvtDeviceD0Entry(
         status = VIOSerialInitAllQueues(Device);
         if (NT_SUCCESS(status) && pContext->isHostMultiport)
         {
-            status = VIOSerialFillQueue(pContext->c_ivq, pContext->CInVqLock);
+            status = VIOSerialFillQueue(pContext->c_ivq, pContext->CInVqLock, &pContext->VDevice);
         }
 
         if (!NT_SUCCESS(status))
